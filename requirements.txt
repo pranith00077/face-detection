@@ -1,9 +1,8 @@
 flask==3.0.2
 opencv-python-headless==4.9.0.80
-mediapipe==0.10.32
+mediapipe==0.10.14
 numpy==1.26.4
 gunicorn==21.2.0
-
 
 
 
