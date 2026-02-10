@@ -1,16 +1,18 @@
-# detector/face_detector.py
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
-
+from typing import List
 import cv2
-import mediapipe as mp
+import numpy as np
+
+from mediapipe.tasks.python import BaseOptions
+from mediapipe.tasks.python.vision import (
+    FaceDetector as MPFaceDetector,
+    FaceDetectorOptions,
+    RunningMode,
+)
 
 
-@dataclass(frozen=True)
+@dataclass
 class FaceBox:
-    """Pixel-space bounding box."""
     x: int
     y: int
     w: int
@@ -19,80 +21,46 @@ class FaceBox:
 
 
 class FaceDetector:
-    """
-    ML Face Detector using MediaPipe Face Detection.
-
-    Notes:
-    - MediaPipe returns relative bounding boxes in [0,1] range.
-    - We convert them to pixel-space (x, y, w, h).
-    """
-
-    def __init__(self, min_confidence: float = 0.5, model_selection: int = 0):
-        """
-        Args:
-            min_confidence: Minimum confidence threshold [0.0 - 1.0]
-            model_selection:
-                0 -> short-range model (best for selfie/webcam)
-                1 -> full-range model (better for far faces)
-        """
-        self.min_confidence = float(min_confidence)
-        self.model_selection = int(model_selection)
-
-        self._mp_face = mp.solutions.face_detection
-        self._detector = self._mp_face.FaceDetection(
-            model_selection=self.model_selection,
-            min_detection_confidence=self.min_confidence,
+    def __init__(self, min_confidence=0.3):
+        options = FaceDetectorOptions(
+            base_options=BaseOptions(
+                model_asset_path="https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite"
+            ),
+            running_mode=RunningMode.IMAGE,
+            min_detection_confidence=min_confidence,
         )
 
-    def detect(self, bgr_image) -> List[FaceBox]:
-        """
-        Detect faces in a BGR image (OpenCV format).
+        self.detector = MPFaceDetector.create_from_options(options)
 
-        Returns:
-            List of FaceBox objects (pixel coordinates + confidence)
-        """
-        if bgr_image is None:
-            raise ValueError("Input image is None")
-
-        h, w = bgr_image.shape[:2]
-        if h == 0 or w == 0:
+    def detect(self, image) -> List[FaceBox]:
+        if image is None:
             return []
 
-        # MediaPipe expects RGB
-        rgb = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
-        results = self._detector.process(rgb)
+        h, w = image.shape[:2]
+        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        faces: List[FaceBox] = []
-        if not results.detections:
-            return faces
+        from mediapipe.framework.formats import image_format_pb2
+        from mediapipe.tasks.python.vision.core import VisionRunningMode
+        from mediapipe.python import Image as MPImage
 
-        for det in results.detections:
-            score = float(det.score[0]) if det.score else 0.0
-            if score < self.min_confidence:
-                continue
+        mp_img = MPImage(image_format=image_format_pb2.ImageFormat.SRGB, data=rgb)
+        result = self.detector.detect(mp_img)
 
-            rel_box = det.location_data.relative_bounding_box
-
-            # Convert relative -> absolute pixels
-            x = int(rel_box.xmin * w)
-            y = int(rel_box.ymin * h)
-            bw = int(rel_box.width * w)
-            bh = int(rel_box.height * h)
-
-            # Clamp to image bounds
-            x = max(0, min(x, w - 1))
-            y = max(0, min(y, h - 1))
-            bw = max(1, min(bw, w - x))
-            bh = max(1, min(bh, h - y))
-
-            faces.append(FaceBox(x=x, y=y, w=bw, h=bh, confidence=score))
-
-        # sort: highest confidence first
-        faces.sort(key=lambda f: f.confidence, reverse=True)
+        faces = []
+        if result.detections:
+            for det in result.detections:
+                box = det.bounding_box
+                faces.append(
+                    FaceBox(
+                        x=box.origin_x,
+                        y=box.origin_y,
+                        w=box.width,
+                        h=box.height,
+                        confidence=det.categories[0].score,
+                    )
+                )
         return faces
 
-    def close(self) -> None:
-        """Free MediaPipe resources."""
-        if self._detector:
-            self._detector.close()
-            self._detector = None
+    def close(self):
+        if self.detector:
+            self.detector.close()
