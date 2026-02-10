@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Face Detection using ML</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+
+<body>
+  <div class="container">
+
+    <div class="header">
+      <div class="brand">
+        <h1>Face Detection using ML</h1>
+        <p>Upload an image → detect faces → get annotated output and cropped faces.</p>
+      </div>
+      <div class="badge">Flask · OpenCV · MediaPipe</div>
+    </div>
+
+    <div class="grid">
+
+      <!-- LEFT: Upload panel -->
+      <div class="card">
+        <div class="card-body">
+
+          <div class="card-title">
+            <h2>Upload Image</h2>
+          </div>
+
+          <form class="form" method="POST" enctype="multipart/form-data" id="uploadForm">
+            <!-- Custom file input -->
+            <div class="filebox">
+              <input id="imageInput" type="file" name="image" accept="image/*" required />
+              <label class="btn primary" for="imageInput">Choose Image</label>
+              <div class="filename" id="fileName">No file selected</div>
+            </div>
+
+            <div class="row">
+              <button class="btn" type="submit">Detect Faces</button>
+
+              <!-- Reset -->
+              <a class="btn ghost" href="/" title="Clear results and upload again">Reset</a>
+            </div>
+          </form>
+
+          {% if error %}
+            <div class="alert" style="margin-top: 12px;"><b>Error:</b> {{ error }}</div>
+          {% endif %}
+
+          {% if faces is defined %}
+            <div class="kpi" style="margin-top: 12px;">
+              <div class="label">Faces detected</div>
+              <div class="value">{{ faces }}</div>
+            </div>
+          {% else %}
+            <div class="footer">Tip: Use a group photo to test multiple faces.</div>
+          {% endif %}
+
+        </div>
+      </div>
+
+      <!-- RIGHT: Results -->
+      <div class="card">
+        <div class="card-body">
+
+          <div class="card-title">
+            <h2>Results</h2>
+          </div>
+
+          {% if faces is defined %}
+
+            {% if no_face %}
+              <div class="alert danger">
+                <b>No face detected.</b><br />
+                {{ message }}
+              </div>
+            {% else %}
+              <div class="media">
+                <div>
+                  <div class="section-title">Annotated Image</div>
+                  <img src="{{ result_image }}" alt="Annotated result" />
+                </div>
+
+                {% if face_images and face_images|length > 0 %}
+                <div>
+                  <div class="section-title">Cropped Faces</div>
+                  <div class="face-grid">
+                    {% for f in face_images %}
+                      <img src="{{ f }}" alt="Face crop" />
+                    {% endfor %}
+                  </div>
+                </div>
+                {% endif %}
+              </div>
+            {% endif %}
+
+          {% else %}
+            <div class="footer">Upload an image to see detection output here.</div>
+          {% endif %}
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById("imageInput");
+    const nameEl = document.getElementById("fileName");
+
+    input.addEventListener("change", () => {
+      if (input.files && input.files.length > 0) {
+        nameEl.textContent = input.files[0].name;
+      } else {
+        nameEl.textContent = "No file selected";
+      }
+    });
+  </script>
+</body>
+</html>
